@@ -3,126 +3,160 @@ package primp
 import (
 	"fmt"
 	"strings"
+
+	browser "github.com/EDDYCJY/fake-useragent"
 )
 
-// getBrowserHeaders 返回用于模拟特定浏览器和操作系统的头部
+// Impersonate和ImpersonateOS类型保持不变
+
+// 浏览器配置，包含所有模拟参数
+type BrowserProfile struct {
+	UserAgent string
+	Headers   map[string]string
+}
+
+// 获取浏览器配置的主函数
+func GetBrowserProfile(browserName string, osName string) (BrowserProfile, error) {
+	browser, err := ImpersonateFromString(browserName)
+	if err != nil {
+		return BrowserProfile{}, err
+	}
+
+	os, err := ImpersonateOSFromString(osName)
+	if err != nil {
+		return BrowserProfile{}, err
+	}
+
+	headers := getBrowserHeaders(browser, os)
+	userAgent := headers["User-Agent"]
+
+	return BrowserProfile{
+		UserAgent: userAgent,
+		Headers:   headers,
+	}, nil
+}
+
+// 获取浏览器头信息
 func getBrowserHeaders(browser Impersonate, os ImpersonateOS) map[string]string {
-	// 如果没有指定操作系统，默认为 Windows
+	// 如果没有指定操作系统，默认为Windows
 	if os == "" {
 		os = Windows
 	}
 
-	// 大多数浏览器通用的基本头部
-	headers := map[string]string{
-		"Accept-Language": "en-US,en;q=0.9",
-		"Accept-Encoding": "gzip, deflate, br",
-		"Connection":      "keep-alive",
-	}
+	// 获取基本的通用头部
+	headers := getBaseHeaders(browser)
 
-	// 添加浏览器特定头部
-	switch browser {
-	case Chrome133:
-		headers["User-Agent"] = getUserAgent(browser, os)
-		headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-		headers["sec-ch-ua"] = `"Google Chrome";v="133", "Chromium";v="133", "Not-A.Brand";v="99"`
-		headers["sec-ch-ua-mobile"] = "?0"
-		headers["sec-ch-ua-platform"] = `"` + string(os) + `"`
-		headers["Sec-Fetch-Dest"] = "document"
-		headers["Sec-Fetch-Mode"] = "navigate"
-		headers["Sec-Fetch-Site"] = "none"
-		headers["Sec-Fetch-User"] = "?1"
-		headers["Upgrade-Insecure-Requests"] = "1"
-	case Chrome131:
-		headers["User-Agent"] = getUserAgent(browser, os)
-		headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-		headers["sec-ch-ua"] = `"Google Chrome";v="131", "Chromium";v="131", "Not-A.Brand";v="99"`
-		headers["sec-ch-ua-mobile"] = "?0"
-		headers["sec-ch-ua-platform"] = `"` + string(os) + `"`
-		headers["Sec-Fetch-Dest"] = "document"
-		headers["Sec-Fetch-Mode"] = "navigate"
-		headers["Sec-Fetch-Site"] = "none"
-		headers["Sec-Fetch-User"] = "?1"
-		headers["Upgrade-Insecure-Requests"] = "1"
-	// ... (添加更多浏览器实现)
-	case Firefox135:
-		headers["User-Agent"] = getUserAgent(browser, os)
-		headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
-		headers["Accept-Language"] = "en-US,en;q=0.5"
-		headers["Connection"] = "keep-alive"
-		headers["Upgrade-Insecure-Requests"] = "1"
-		headers["Sec-Fetch-Dest"] = "document"
-		headers["Sec-Fetch-Mode"] = "navigate"
-		headers["Sec-Fetch-Site"] = "none"
-		headers["Sec-Fetch-User"] = "?1"
-	case Safari18:
-		headers["User-Agent"] = getUserAgent(browser, os)
-		headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-		headers["Accept-Language"] = "en-US,en;q=0.9"
-		headers["Connection"] = "keep-alive"
-		// ... (添加更多浏览器实现)
+	// 添加User-Agent
+	headers["User-Agent"] = getUserAgent(browser, os)
+
+	// 添加特定于浏览器的附加头部
+	switch {
+	case strings.HasPrefix(string(browser), "Chrome"):
+		addChromeHeaders(headers, browser, os)
+	case strings.HasPrefix(string(browser), "Firefox"):
+		addFirefoxHeaders(headers)
+	case strings.HasPrefix(string(browser), "Safari"):
+		addSafariHeaders(headers)
 	}
 
 	return headers
 }
 
-// getUserAgent 返回浏览器和操作系统的适当 User-Agent 字符串
-func getUserAgent(browser Impersonate, os ImpersonateOS) string {
-	switch browser {
-	case Chrome133:
-		switch os {
-		case Windows:
-			return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
-		case MacOS:
-			return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
-		case Linux:
-			return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
-		case Android:
-			return "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36"
-		case IOS:
-			return "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/133.0.0.0 Mobile/15E148 Safari/604.1"
+// 获取基本头信息
+func getBaseHeaders(browser Impersonate) map[string]string {
+	return map[string]string{
+		"Accept-Language": "en-US,en;q=0.9",
+		"Accept-Encoding": "gzip, deflate, br",
+		"Connection":      "keep-alive",
+	}
+}
+
+// 添加Chrome特有的头信息
+func addChromeHeaders(headers map[string]string, browser Impersonate, os ImpersonateOS) {
+	headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+
+	// 从浏览器字符串中提取版本号
+	version := extractVersion(string(browser))
+
+	headers["sec-ch-ua"] = fmt.Sprintf(`"Google Chrome";v="%s", "Chromium";v="%s", "Not-A.Brand";v="99"`, version, version)
+	headers["sec-ch-ua-mobile"] = "?0"
+	headers["sec-ch-ua-platform"] = `"` + string(os) + `"`
+	headers["Sec-Fetch-Dest"] = "document"
+	headers["Sec-Fetch-Mode"] = "navigate"
+	headers["Sec-Fetch-Site"] = "none"
+	headers["Sec-Fetch-User"] = "?1"
+	headers["Upgrade-Insecure-Requests"] = "1"
+}
+
+// 添加Firefox特有的头信息
+func addFirefoxHeaders(headers map[string]string) {
+	headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+	headers["Accept-Language"] = "en-US,en;q=0.5"
+	headers["Upgrade-Insecure-Requests"] = "1"
+	headers["Sec-Fetch-Dest"] = "document"
+	headers["Sec-Fetch-Mode"] = "navigate"
+	headers["Sec-Fetch-Site"] = "none"
+	headers["Sec-Fetch-User"] = "?1"
+}
+
+// 添加Safari特有的头信息
+func addSafariHeaders(headers map[string]string) {
+	headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+	headers["Accept-Language"] = "en-US,en;q=0.9"
+}
+
+// 从浏览器名称中提取版本号
+func extractVersion(browserString string) string {
+	parts := strings.Split(browserString, "_")
+	if len(parts) > 1 {
+		return parts[1]
+	}
+	return "133" // 默认版本
+}
+
+// 获取用户代理字符串
+func getUserAgent(browserType Impersonate, os ImpersonateOS) string {
+	browserName := strings.Split(string(browserType), "_")[0]
+
+	var baseUA string
+	switch strings.ToLower(browserName) {
+	case "chrome":
+		baseUA = browser.Chrome()
+	case "firefox":
+		baseUA = browser.Firefox()
+	case "safari":
+		baseUA = browser.Safari()
+	default:
+		baseUA = browser.Chrome()
+	}
+
+	// 修改用户代理的版本信息以匹配指定版本
+	version := extractVersion(string(browserType))
+	ua := modifyUserAgentVersion(baseUA, browserName, version, string(os))
+
+	return ua
+}
+
+// 修改用户代理版本信息
+func modifyUserAgentVersion(baseUA, browserName, version, os string) string {
+	switch strings.ToLower(browserName) {
+	case "chrome":
+		if strings.Contains(baseUA, "Chrome/") {
+			parts := strings.Split(baseUA, "Chrome/")
+			versionParts := strings.Split(parts[1], " ")
+			return parts[0] + "Chrome/" + version + ".0.0.0 " + strings.Join(versionParts[1:], " ")
 		}
-	case Chrome131:
-		switch os {
-		case Windows:
-			return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-		case MacOS:
-			return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-		case Linux:
-			return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-		case Android:
-			return "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
-		case IOS:
-			return "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/131.0.0.0 Mobile/15E148 Safari/604.1"
-		}
-	// ... (添加更多浏览器 User-Agent 实现)
-	case Firefox135:
-		switch os {
-		case Windows:
-			return "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"
-		case MacOS:
-			return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:135.0) Gecko/20100101 Firefox/135.0"
-		case Linux:
-			return "Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0"
-		case Android:
-			return "Mozilla/5.0 (Android 10; Mobile; rv:135.0) Gecko/135.0 Firefox/135.0"
-		case IOS:
-			return "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/135.0 Mobile/15E148 Safari/605.1.15"
-		}
-	case Safari18:
-		switch os {
-		case MacOS:
-			return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
-		case IOS:
-			return "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-		default:
-			// Safari 主要在 macOS 和 iOS 上
-			return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+	case "firefox":
+		if strings.Contains(baseUA, "Firefox/") {
+			parts := strings.Split(baseUA, "Firefox/")
+			return parts[0] + "Firefox/" + version + ".0"
 		}
 	}
 
-	// 默认返回最新 Chrome 版本的 Windows User-Agent
-	return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+	return baseUA
 }
+
+// ImpersonateFromString 和 ImpersonateOSFromString 保持不变
 
 // ImpersonateFromString 将字符串解析为 Impersonate 值
 func ImpersonateFromString(s string) (Impersonate, error) {
@@ -219,14 +253,6 @@ func ImpersonateFromString(s string) (Impersonate, error) {
 		return OkHttp410, nil
 	case "okhttp_5":
 		return OkHttp5, nil
-	case "edge_101":
-		return Edge101, nil
-	case "edge_122":
-		return Edge122, nil
-	case "edge_127":
-		return Edge127, nil
-	case "edge_131":
-		return Edge131, nil
 	case "firefox_109":
 		return Firefox109, nil
 	case "firefox_117":
